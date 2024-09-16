@@ -348,7 +348,7 @@ class AttentionSharingPatcher(torch.nn.Module):
 
         self.dtype = torch.float32
         if model_management.should_use_fp16(model_management.get_torch_device()):
-            param = next(unet.parameters())
+            param = next(unet.model.parameters())
             self.dtype = param.dtype
             device = param.device
             self.hookers.to(dtype=self.dtype, device=device)
