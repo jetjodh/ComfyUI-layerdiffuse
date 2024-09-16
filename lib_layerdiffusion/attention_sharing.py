@@ -346,8 +346,12 @@ class AttentionSharingPatcher(torch.nn.Module):
         else:
             self.kwargs_encoder = None
 
-        self.dtype = model_management.get_torch_device()
-        self.hookers.to(model_management.get_torch_device())
+        self.dtype = torch.float32
+        if model_management.should_use_fp16(model_management.get_torch_device()):
+            param = next(unet.parameters())
+            self.dtype = param.dtype
+            device = param.device
+            self.hookers.to(dtype=self.dtype, device=device)
         return
 
     def set_control(self, img):
