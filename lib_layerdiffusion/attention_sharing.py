@@ -170,7 +170,7 @@ class AttentionSharingUnit(torch.nn.Module):
             for f in range(self.frames):
                 control_signal = self.control_signals[context_dim].to(
                     modified_hidden_states
-                )
+                ).to()
                 control = self.control_convs[f](control_signal)
                 control = einops.rearrange(control, "b c h w -> b (h w) c")
                 control_outs.append(control)
@@ -346,10 +346,8 @@ class AttentionSharingPatcher(torch.nn.Module):
         else:
             self.kwargs_encoder = None
 
-        self.dtype = torch.float32
-        if model_management.should_use_fp16(model_management.get_torch_device()):
-            self.dtype = torch.float16
-            self.hookers.half()
+        self.dtype = model_management.get_torch_device()
+        self.hookers.to(model_management.get_torch_device())
         return
 
     def set_control(self, img):
