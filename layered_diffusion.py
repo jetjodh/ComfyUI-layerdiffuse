@@ -19,7 +19,7 @@ from .lib_layerdiffusion.utils import (
     load_file_from_url,
     to_lora_patch_dict,
 )
-from .lib_layerdiffusion.models import TransparentVAEDecoder
+from .lib_layerdiffusion.models import TransparentVAEDecoder, TransparentVAEEncoder
 from .lib_layerdiffusion.attention_sharing import AttentionSharingPatcher
 from .lib_layerdiffusion.enums import StableDiffusionVersion
 
@@ -713,5 +713,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LayeredDiffusionDecode": "Layer Diffuse Decode",
     "LayeredDiffusionDecodeRGBA": "Layer Diffuse Decode (RGBA)",
     "LayeredDiffusionDecodeSplit": "Layer Diffuse Decode (Split)",
-    "LayeredDiffusionEncode": "Layere Diffusion Encode",
+    "LayeredDiffusionEncode": "Layer Diffusion Encode",
 }
