@@ -60,6 +60,31 @@ class LatentTransparencyOffsetEncoder(torch.nn.Module):
     def __call__(self, x):
         return self.blocks(x)
 
+class TransparentVAEEncoder:
+    def __init__(self, sd):
+        self.load_device = memory_management.get_torch_device()
+        self.offload_device = memory_management.unet_offload_device()
+        self.dtype = torch.float16 if memory_management.should_use_fp16(self.load_device) else torch.float32
+
+        model = LatentTransparencyOffsetEncoder()
+        model.load_state_dict(sd, strict=True)
+        model.to(device=self.offload_device, dtype=self.dtype)
+        model.eval()
+
+        self.model = ModelPatcher(model, load_device=self.load_device, offload_device=self.offload_device)
+        return
+
+    @torch.no_grad()
+    def encode(self, image):
+        list_of_np_rgba_hwc_uint8 = [np.array(image)]
+        memory_management.load_model_gpu(self.model)
+        list_of_np_rgb_padded = [pad_rgb(x) for x in list_of_np_rgba_hwc_uint8]
+        rgb_padded_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgb_padded, axis=0)).float().movedim(-1, 1)
+        rgba_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgba_hwc_uint8, axis=0)).float().movedim(-1, 1) / 255.0
+        a_bchw_01 = rgba_bchw_01[:, 3:, :, :]
+        offset_feed = torch.cat([a_bchw_01, rgb_padded_bchw_01], dim=1).to(device=self.load_device, dtype=self.dtype)
+        offset = self.model.model(offset_feed)
+        return offset
 
 # 1024 * 1024 * 3 -> 16 * 16 * 512 -> 1024 * 1024 * 3
 class UNet1024(ModelMixin, ConfigMixin):
@@ -328,3 +353,76 @@ class TransparentVAEDecoder:
         assert y.shape[1] == 4
         # Restore image to original device of input image.
         return y.to(pixel_device, dtype=pixel_dtype)
+
+def pad_rgb(np_rgba_hwc):
+    # np_rgba_hwc is in 0..1
+    pyramid = build_alpha_pyramid(color=np_rgba_hwc[..., :3], alpha=np_rgba_hwc[..., 3:])
+    top_c, top_a = pyramid[0]
+    fg = np.sum(top_c, axis=(0, 1), keepdims=True) / np.sum(top_a, axis=(0, 1), keepdims=True).clip(1e-8, 1e32)
+    for layer_c, layer_a in pyramid:
+        layer_h, layer_w, _ = layer_c.shape
+        fg = cv2.resize(fg, (layer_w, layer_h), interpolation=cv2.INTER_LINEAR)
+        fg = layer_c + fg * (1.0 - layer_a)
+    return fg
+
+
+def build_alpha_pyramid(color, alpha, dk=1.2):
+    pyramid = []
+    current_premultiplied_color = color * alpha
+    current_alpha = alpha
+
+    while True:
+        pyramid.append((current_premultiplied_color, current_alpha))
+
+        H, W = current_alpha.shape[:2]
+        if min(H, W) == 1:
+            break
+
+        new_W = max(1, int(W / dk))
+        new_H = max(1, int(H / dk))
+
+        current_premultiplied_color = cv2.resize(current_premultiplied_color, (new_W, new_H), interpolation=cv2.INTER_AREA)
+        current_alpha = cv2.resize(current_alpha, (new_W, new_H), interpolation=cv2.INTER_AREA)
+        if current_alpha.ndim == 2:
+            current_alpha = current_alpha[:, :, None]
+
+    return pyramid[::-1]
+
+
+class TransparentVAEEncoder:
+    def __init__(self, sd, device, dtype):
+        self.load_device = device
+        self.dtype = dtype
+
+        model = LatentTransparencyOffsetEncoder()
+        model.load_state_dict(sd, strict=True)
+        model.to(self.load_device, dtype=self.dtype)
+        model.eval()
+        self.model = model
+
+    @torch.no_grad()
+    def encode(self, image: torch.Tensor) -> torch.Tensor:
+        # image: [B, C=4, H, W], values in 0..1
+        rgba_bchw_01 = image  # Assuming image is already in 0..1
+        batch_size = rgba_bchw_01.shape[0]
+
+        # Move tensor to CPU and convert to numpy array
+        rgba_bchw_01 = rgba_bchw_01.cpu()
+        rgba_bhwc_01 = rgba_bchw_01.permute(0, 2, 3, 1).numpy()  # [B, H, W, C=4]
+
+        # Process each image in the batch
+        list_of_np_rgba_hwc = [rgba_bhwc_01[i] for i in range(batch_size)]
+        list_of_np_rgb_padded = [pad_rgb(x) for x in list_of_np_rgba_hwc]
+
+        # Convert back to tensor
+        rgb_padded_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgb_padded, axis=0)).float().permute(0, 3, 1, 2)  # [B, C=3, H, W]
+
+        # Get alpha channel
+        a_bchw_01 = rgba_bchw_01[:, 3:4, :, :]  # [B, 1, H, W]
+
+        # Concatenate alpha and padded RGB
+        offset_feed = torch.cat([a_bchw_01, rgb_padded_bchw_01], dim=1).to(device=self.load_device, dtype=self.dtype)
+
+        # Pass through the model
+        offset = self.model(offset_feed)
+        return offset
