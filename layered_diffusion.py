@@ -666,7 +666,16 @@ class LayeredDiffusionEncode:
 
         # Prepare the image
         image = image.movedim(-1, 1)  # [B, H, W, C] -> [B, C, H, W]
-        assert image.shape[1] == 4, "Input image must have 4 channels (RGBA)"
+        
+        if image.shape[1] == 4:
+            pass  # Image already has 4 channels (RGBA)
+        elif image.shape[1] == 3:
+            # Add an alpha channel of ones (fully opaque)
+            alpha_channel = torch.ones_like(image[:, :1, :, :])
+            image = torch.cat([image, alpha_channel], dim=1)
+        else:
+            raise ValueError(f"Input image must have 3 or 4 channels, got {image.shape[1]} channels.")
+
 
         if mask is not None:
             # Ensure mask is [B, 1, H, W]
