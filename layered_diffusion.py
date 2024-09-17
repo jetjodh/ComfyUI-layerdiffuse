@@ -642,7 +642,6 @@ class LayeredDiffusionEncode:
             self.layer_model_root = os.path.join(folder_paths.models_dir, "layer_model")
 
     def encode(self, image, sd_version, mask=None, latent=None):
-        print(latent["samples"].dtype, latent["samples"].shape)
         sd_version = StableDiffusionVersion(sd_version)
         if sd_version == StableDiffusionVersion.SD1x:
             url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/layer_sd15_vae_transparent_encoder.safetensors"
@@ -659,9 +658,7 @@ class LayeredDiffusionEncode:
             self.vae_transparent_encoder[sd_version] = TransparentVAEEncoder(
                 load_torch_file(model_path),
                 device=comfy.model_management.get_torch_device(),
-                dtype=(
-                    comfy.model_management.vae_dtype()
-                ),
+                dtype=torch.float16,
             )
 
         # Prepare the image
@@ -696,7 +693,6 @@ class LayeredDiffusionEncode:
         # Encode the image
         offset = self.vae_transparent_encoder[sd_version].encode(image)
         # Return the offset as 'LATENT'
-        print(offset.dtype, offset.shape)
         return ({"samples":offset}, )
 
 
