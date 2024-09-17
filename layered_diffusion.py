@@ -658,9 +658,7 @@ class LayeredDiffusionEncode:
                 load_torch_file(model_path),
                 device=comfy.model_management.get_torch_device(),
                 dtype=(
-                    torch.float16
-                    if comfy.model_management.should_use_fp16()
-                    else torch.float32
+                    comfy.model_management.vae_dtype()
                 ),
             )
 
