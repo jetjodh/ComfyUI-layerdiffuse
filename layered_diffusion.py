@@ -623,6 +623,9 @@ class LayeredDiffusionEncode:
                     },
                 ),
             },
+            "optional": {
+                "mask": ("MASK",),
+            },
         }
 
     RETURN_TYPES = ("LATENT",)
@@ -637,7 +640,7 @@ class LayeredDiffusionEncode:
         else:
             self.layer_model_root = os.path.join(folder_paths.models_dir, "layer_model")
 
-    def encode(self, image, sd_version):
+    def encode(self, image, sd_version, mask=None):
         sd_version = StableDiffusionVersion(sd_version)
         if sd_version == StableDiffusionVersion.SD1x:
             url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/layer_sd15_vae_transparent_encoder.safetensors"
@@ -665,10 +668,27 @@ class LayeredDiffusionEncode:
         image = image.movedim(-1, 1)  # [B, H, W, C] -> [B, C, H, W]
         assert image.shape[1] == 4, "Input image must have 4 channels (RGBA)"
 
+        if mask is not None:
+            # Ensure mask is [B, 1, H, W]
+            if len(mask.shape) == 3:
+                mask = mask.unsqueeze(1)  # [B, H, W] -> [B, 1, H, W]
+            elif len(mask.shape) == 2:
+                mask = mask.unsqueeze(0).unsqueeze(0)  # [H, W] -> [1, 1, H, W]
+
+            # Resize mask to match image size
+            mask = torch.nn.functional.interpolate(
+                mask, size=(image.shape[2], image.shape[3]), mode="bilinear", align_corners=False
+            )
+
+            # Apply the mask to the image
+            m = (1.0 - mask.round())  # Invert mask
+            image = (image - 0.5) * m + 0.5  # Zero out masked areas
+
         # Encode the image
         offset = self.vae_transparent_encoder[sd_version].encode(image)
         # Return the offset as 'LATENT'
         return (offset,)
+
 
 
 
