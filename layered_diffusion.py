@@ -625,6 +625,7 @@ class LayeredDiffusionEncode:
             },
             "optional": {
                 "mask": ("MASK",),
+                "latent": ("LATENT",),
             },
         }
 
@@ -640,7 +641,8 @@ class LayeredDiffusionEncode:
         else:
             self.layer_model_root = os.path.join(folder_paths.models_dir, "layer_model")
 
-    def encode(self, image, sd_version, mask=None):
+    def encode(self, image, sd_version, mask=None, latent=None):
+        print(latent.dtype, latent.shape)
         sd_version = StableDiffusionVersion(sd_version)
         if sd_version == StableDiffusionVersion.SD1x:
             url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/layer_sd15_vae_transparent_encoder.safetensors"
@@ -694,6 +696,7 @@ class LayeredDiffusionEncode:
         # Encode the image
         offset = self.vae_transparent_encoder[sd_version].encode(image)
         # Return the offset as 'LATENT'
+        print(offset.dtype, offset.shape)
         return ({"samples":offset}, )
 
 
