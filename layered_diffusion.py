@@ -696,7 +696,7 @@ class LayeredDiffusionEncode:
         # Encode the image
         offset = self.vae_transparent_encoder[sd_version].encode(image)
         # Return the offset as 'LATENT'
-        return (offset,)
+        return ({"samples":offset}, )
 
 
 
