@@ -378,6 +378,7 @@ class TransparentVAEEncoder:
     def encode(self, image: torch.Tensor) -> torch.Tensor:
         # image: [B, C=4, H, W], values in 0..1
         rgba_bchw_01 = image  # Assuming image is already in 0..1
+        input_dtype = image.dtype  # Capture the input image's data type
         batch_size = rgba_bchw_01.shape[0]
 
         # Move tensor to CPU and convert to numpy array
@@ -388,8 +389,8 @@ class TransparentVAEEncoder:
         list_of_np_rgba_hwc = [rgba_bhwc_01[i] for i in range(batch_size)]
         list_of_np_rgb_padded = [pad_rgb(x) for x in list_of_np_rgba_hwc]
 
-        # Convert back to tensor
-        rgb_padded_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgb_padded, axis=0)).float().permute(0, 3, 1, 2)  # [B, C=3, H, W]
+        # Convert back to tensor with the original dtype
+        rgb_padded_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgb_padded, axis=0)).permute(0, 3, 1, 2).to(dtype=input_dtype)  # [B, C=3, H, W]
 
         # Get alpha channel
         a_bchw_01 = rgba_bchw_01[:, 3:4, :, :]  # [B, 1, H, W]
