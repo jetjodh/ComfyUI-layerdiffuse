@@ -60,32 +60,6 @@ class LatentTransparencyOffsetEncoder(torch.nn.Module):
     def __call__(self, x):
         return self.blocks(x)
 
-class TransparentVAEEncoder:
-    def __init__(self, sd):
-        self.load_device = memory_management.get_torch_device()
-        self.offload_device = memory_management.unet_offload_device()
-        self.dtype = torch.float16 if memory_management.should_use_fp16(self.load_device) else torch.float32
-
-        model = LatentTransparencyOffsetEncoder()
-        model.load_state_dict(sd, strict=True)
-        model.to(device=self.offload_device, dtype=self.dtype)
-        model.eval()
-
-        self.model = ModelPatcher(model, load_device=self.load_device, offload_device=self.offload_device)
-        return
-
-    @torch.no_grad()
-    def encode(self, image):
-        list_of_np_rgba_hwc_uint8 = [np.array(image)]
-        memory_management.load_model_gpu(self.model)
-        list_of_np_rgb_padded = [pad_rgb(x) for x in list_of_np_rgba_hwc_uint8]
-        rgb_padded_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgb_padded, axis=0)).float().movedim(-1, 1)
-        rgba_bchw_01 = torch.from_numpy(np.stack(list_of_np_rgba_hwc_uint8, axis=0)).float().movedim(-1, 1) / 255.0
-        a_bchw_01 = rgba_bchw_01[:, 3:, :, :]
-        offset_feed = torch.cat([a_bchw_01, rgb_padded_bchw_01], dim=1).to(device=self.load_device, dtype=self.dtype)
-        offset = self.model.model(offset_feed)
-        return offset
-
 # 1024 * 1024 * 3 -> 16 * 16 * 512 -> 1024 * 1024 * 3
 class UNet1024(ModelMixin, ConfigMixin):
     @register_to_config
