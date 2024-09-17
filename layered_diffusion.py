@@ -642,7 +642,7 @@ class LayeredDiffusionEncode:
             self.layer_model_root = os.path.join(folder_paths.models_dir, "layer_model")
 
     def encode(self, image, sd_version, mask=None, latent=None):
-        print(latent.dtype, latent.shape)
+        print(latent[samples].dtype, latent[samples].shape)
         sd_version = StableDiffusionVersion(sd_version)
         if sd_version == StableDiffusionVersion.SD1x:
             url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/layer_sd15_vae_transparent_encoder.safetensors"
