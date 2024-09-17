@@ -602,6 +602,75 @@ class LayeredDiffusionDiff:
             model, weight
         ) + ld_model.apply_c_concat(cond, uncond, c_concat)
 
+class LayeredDiffusionEncode:
+    """
+    Encode an RGBA image into a latent representation using TransparentVAEEncoder.
+    Outputs a LATENT tensor that can be used in further processing.
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "sd_version": (
+                    [
+                        StableDiffusionVersion.SD1x.value,
+                        StableDiffusionVersion.SDXL.value,
+                    ],
+                    {
+                        "default": StableDiffusionVersion.SDXL.value,
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "encode"
+    CATEGORY = "layer_diffuse"
+
+    def __init__(self):
+        self.vae_transparent_encoder = {}
+        # Determine the root directory for layer models
+        if "layer_model" in folder_paths.folder_names_and_paths:
+            self.layer_model_root = get_folder_paths("layer_model")[0]
+        else:
+            self.layer_model_root = os.path.join(folder_paths.models_dir, "layer_model")
+
+    def encode(self, image, sd_version):
+        sd_version = StableDiffusionVersion(sd_version)
+        if sd_version == StableDiffusionVersion.SD1x:
+            url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/layer_sd15_vae_transparent_encoder.safetensors"
+            file_name = "layer_sd15_vae_transparent_encoder.safetensors"
+        elif sd_version == StableDiffusionVersion.SDXL:
+            url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/vae_transparent_encoder.safetensors"
+            file_name = "vae_transparent_encoder.safetensors"
+
+        # Load the encoder model if not already loaded
+        if not self.vae_transparent_encoder.get(sd_version):
+            model_path = load_file_from_url(
+                url=url, model_dir=self.layer_model_root, file_name=file_name
+            )
+            self.vae_transparent_encoder[sd_version] = TransparentVAEEncoder(
+                load_torch_file(model_path),
+                device=comfy.model_management.get_torch_device(),
+                dtype=(
+                    torch.float16
+                    if comfy.model_management.should_use_fp16()
+                    else torch.float32
+                ),
+            )
+
+        # Prepare the image
+        image = image.movedim(-1, 1)  # [B, H, W, C] -> [B, C, H, W]
+        assert image.shape[1] == 4, "Input image must have 4 channels (RGBA)"
+
+        # Encode the image
+        offset = self.vae_transparent_encoder[sd_version].encode(image)
+        # Return the offset as 'LATENT'
+        return (offset,)
+
+
 
 NODE_CLASS_MAPPINGS = {
     "LayeredDiffusionApply": LayeredDiffusionFG,
@@ -612,6 +681,7 @@ NODE_CLASS_MAPPINGS = {
     "LayeredDiffusionDecode": LayeredDiffusionDecode,
     "LayeredDiffusionDecodeRGBA": LayeredDiffusionDecodeRGBA,
     "LayeredDiffusionDecodeSplit": LayeredDiffusionDecodeSplit,
+    "LayeredDiffusionEncode": LayeredDiffusionEncode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -623,4 +693,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LayeredDiffusionDecode": "Layer Diffuse Decode",
     "LayeredDiffusionDecodeRGBA": "Layer Diffuse Decode (RGBA)",
     "LayeredDiffusionDecodeSplit": "Layer Diffuse Decode (Split)",
+    "LayeredDiffusionEncode": "Layere Diffusion Encode",
 }
