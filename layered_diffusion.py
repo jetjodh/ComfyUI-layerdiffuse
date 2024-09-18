@@ -658,7 +658,7 @@ class LayeredDiffusionEncode:
             self.vae_transparent_encoder[sd_version] = TransparentVAEEncoder(
                 load_torch_file(model_path),
                 device=comfy.model_management.get_torch_device(),
-                dtype=torch.float16,
+                dtype=image.dtype,
             )
 
         # Prepare the image
