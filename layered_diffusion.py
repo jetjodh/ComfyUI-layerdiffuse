@@ -622,10 +622,10 @@ class LayeredDiffusionEncode:
                         "default": StableDiffusionVersion.SDXL.value,
                     },
                 ),
+                "latent": ("LATENT",),
             },
             "optional": {
                 "mask": ("MASK",),
-                "latent": ("LATENT",),
             },
         }
 
@@ -641,7 +641,7 @@ class LayeredDiffusionEncode:
         else:
             self.layer_model_root = os.path.join(folder_paths.models_dir, "layer_model")
 
-    def encode(self, image, sd_version, mask=None, latent=None):
+    def encode(self, image, sd_version, latent, mask=None):
         sd_version = StableDiffusionVersion(sd_version)
         if sd_version == StableDiffusionVersion.SD1x:
             url = "https://huggingface.co/LayerDiffusion/layerdiffusion-v1/resolve/main/layer_sd15_vae_transparent_encoder.safetensors"
@@ -692,8 +692,11 @@ class LayeredDiffusionEncode:
 
         # Encode the image
         offset = self.vae_transparent_encoder[sd_version].encode(image)
+
+        # Apply offset to latentas reglarization (https://github.com/lllyasviel/sd-forge-layerdiffuse/blob/b1e66511e3a405a9e671da0755fc5356e033e97f/scripts/forge_layerdiffusion.py#L431)
+        regularized_latent = latent.mean + latent.std * offset
         # Return the offset as 'LATENT'
-        return ({"samples":offset}, )
+        return ({"samples":regularized_latent}, )
 
 
 
