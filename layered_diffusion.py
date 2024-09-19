@@ -629,7 +629,7 @@ class LayeredDiffusionEncode:
             },
         }
 
-    RETURN_TYPES = ("LATENT",)
+    RETURN_TYPES = ("LATENT", "LATENT")
     FUNCTION = "encode"
     CATEGORY = "layer_diffuse"
 
@@ -693,10 +693,11 @@ class LayeredDiffusionEncode:
         # Encode the image
         offset = self.vae_transparent_encoder[sd_version].encode(image)
 
-        # Apply offset to latentas reglarization (https://github.com/lllyasviel/sd-forge-layerdiffuse/blob/b1e66511e3a405a9e671da0755fc5356e033e97f/scripts/forge_layerdiffusion.py#L431)
-        regularized_latent = latent["samples"] + offset
+        # # Apply offset to latentas reglarization (https://github.com/lllyasviel/sd-forge-layerdiffuse/blob/b1e66511e3a405a9e671da0755fc5356e033e97f/scripts/forge_layerdiffusion.py#L431)
+        ### WON'T work until comfy codebase is pacthed include the offset in regularization calculation whichis not possible with a node. 
+        # regularized_latent = latent["samples"] + offset
         # Return the offset as 'LATENT'
-        return ({"samples":regularized_latent}, )
+        return ({"samples":offset}, latent, )
 
 
 
